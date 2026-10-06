@@ -1234,9 +1234,9 @@ const resumeData = {
         "A responsive portfolio that gives recruiters one accessible place to explore my background, projects, and resume. I built the project gallery, keyboard-friendly carousel, optimized image loading, SEO metadata, validation scripts, and automated GitHub Pages deployment.",
       tags: ["HTML5", "CSS3", "JavaScript", "GitHub Actions"],
       githubUrl: "https://github.com/SUJALSHK/sujals-portfolio",
-      liveUrl: "https://sujalshk.github.io/sujals-portfolio/",
-      previewLabel: "SS",
-      previewText: "Portfolio & Project Gallery",
+      liveUrl: "https://sujalshakya.com/",
+      image: "DeveloperPortfolio.png",
+      imageAlt: "Sujal Shakya's developer portfolio homepage",
     },
     {
       title: "Amazon Storefront Clone",
