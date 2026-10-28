@@ -1,4 +1,5 @@
-import { CreateMLCEngine } from "https://esm.run/@mlc-ai/web-llm";
+import { ASSISTANT_CONFIG } from "./assistant-config.js";
+import { IN_SCOPE, OUT_OF_SCOPE, buildKnowledgeItems, prepareTurn, answerTurn, recordTurn } from "./assistant-policy.js";
 import { createClient } from "https://esm.run/@supabase/supabase-js@2";
 
 const MODEL_ID = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
@@ -180,960 +181,6 @@ async function getExperience() {
   return experienceFetchPromise;
 }
 
-function projectField(value, fallback = "Not provided") {
-  if (typeof value !== "string") return fallback;
-
-  const compactValue = value.replace(/\s+/g, " ").trim();
-  return compactValue || fallback;
-}
-
-function normalizedWords(value) {
-  return projectField(value, "")
-    .toLocaleLowerCase()
-    .match(/[a-z0-9+#.]+/g) || [];
-}
-
-function compactList(value) {
-  if (Array.isArray(value)) {
-    return value.map((item) => projectField(item, "")).filter(Boolean);
-  }
-
-  if (typeof value !== "string") return [];
-
-  const trimmedValue = value.trim();
-  if (!trimmedValue) return [];
-
-  if (trimmedValue.startsWith("[")) {
-    try {
-      const parsedValue = JSON.parse(trimmedValue);
-      if (Array.isArray(parsedValue)) return compactList(parsedValue);
-    } catch {
-      // Keep non-JSON text as a normal list value.
-    }
-  }
-
-  return trimmedValue
-    .split(/\r?\n/)
-    .map((item) => item.replace(/^[-•]\s*/, "").trim())
-    .filter(Boolean);
-}
-
-function experienceEndLabel(item) {
-  const endDate = projectField(item.end_date, "");
-
-  if (item.is_current === true) {
-    return endDate ? `${endDate} (scheduled end; currently ongoing)` : "Present";
-  }
-
-  return endDate;
-}
-
-function experienceDateRange(item) {
-  const startDate = projectField(item.start_date, "");
-  const endDate = experienceEndLabel(item);
-
-  if (startDate && endDate) return `${startDate} to ${endDate}`;
-  return startDate || endDate;
-}
-
-function experienceSearchText(item) {
-  return [
-    item.company,
-    item.role,
-    item.location,
-    item.summary,
-    item.experience_type,
-    ...compactList(item.responsibilities),
-    ...compactList(item.technologies),
-  ]
-    .map((value) => projectField(value, ""))
-    .filter(Boolean)
-    .join(" ");
-}
-
-function companyMatchesQuestion(company, question) {
-  const companyWords = normalizedWords(company).filter((word) => word.length > 2);
-  const questionWords = new Set(normalizedWords(question));
-  const matchingWordCount = companyWords.filter((word) =>
-    questionWords.has(word)
-  ).length;
-
-  return (
-    matchingWordCount >= Math.min(2, companyWords.length) &&
-    matchingWordCount > 0
-  );
-}
-
-function isInternshipQuestion(question) {
-  const questionWords = new Set(normalizedWords(question));
-  return questionWords.has("intern") || questionWords.has("internship");
-}
-
-function isInternshipExperience(item) {
-  const typeWords = new Set([
-    ...normalizedWords(item.experience_type),
-    ...normalizedWords(item.role),
-  ]);
-  return typeWords.has("intern") || typeWords.has("internship");
-}
-
-function isExperienceQuestion(experience, question) {
-  const questionWords = new Set(normalizedWords(question));
-  const hasCompanyMatch = experience.some((item) =>
-    companyMatchesQuestion(item.company, question)
-  );
-
-  return (
-    hasCompanyMatch ||
-    [
-      "experience",
-      "responsibility",
-      "responsibilities",
-      "company",
-      "employer",
-      "employed",
-      "intern",
-      "internship",
-      "role",
-      "there",
-    ].some((word) => questionWords.has(word)) ||
-    /\b(?:work|worked|working)\s+(?:at|for|on)\b/i.test(question)
-  );
-}
-
-function matchingExperienceForQuestion(
-  experience,
-  question,
-  skillData,
-  history = []
-) {
-  const directCompanyMatches = experience.filter((item) =>
-    companyMatchesQuestion(item.company, question)
-  );
-  if (directCompanyMatches.length) return directCompanyMatches;
-
-  if (isInternshipQuestion(question)) {
-    return experience.filter(isInternshipExperience);
-  }
-
-  const questionWords = new Set(normalizedWords(question));
-  const ignoredWords = new Set([
-    "what",
-    "which",
-    "does",
-    "did",
-    "sujal",
-    "have",
-    "has",
-    "his",
-    "with",
-    "from",
-    "that",
-    "this",
-    "there",
-    "experience",
-    "responsibility",
-    "responsibilities",
-    "technology",
-    "technologies",
-    "skill",
-    "skills",
-    "used",
-    "use",
-    "work",
-    "worked",
-    "working",
-    "currently",
-    "current",
-    "project",
-    "company",
-  ]);
-  const relevantWords = [...questionWords].filter(
-    (word) => word.length > 2 && !ignoredWords.has(word)
-  );
-  const relatedSkillNames =
-    skillData?.status === "available"
-      ? skillData.skills
-          .filter((skill) => {
-            const skillWords = [
-              ...normalizedWords(skill.name),
-              ...normalizedWords(skill.category),
-            ];
-            return skillWords.some((word) => relevantWords.includes(word));
-          })
-          .map((skill) => projectField(skill.name, ""))
-          .filter(Boolean)
-      : [];
-
-  if (relevantWords.length) {
-    const matches = experience.filter((item) => {
-      const searchableWords = new Set(normalizedWords(experienceSearchText(item)));
-      const directMatch = relevantWords.some((word) => searchableWords.has(word));
-      const technologies = compactList(item.technologies)
-        .join(" ")
-        .toLocaleLowerCase();
-      const relatedSkillMatch = relatedSkillNames.some((skillName) => {
-        const normalizedName = projectField(skillName, "").toLocaleLowerCase();
-        return (
-          normalizedName &&
-          (technologies.includes(normalizedName) ||
-            normalizedName
-              .split(/\s+/)
-              .some((word) => word.length > 3 && technologies.includes(word)))
-        );
-      });
-
-      return directMatch || relatedSkillMatch;
-    });
-
-    if (matches.length) return matches;
-  }
-
-  const isFollowUp = ["there", "that", "it"].some((word) =>
-    questionWords.has(word)
-  );
-  if (isFollowUp) {
-    for (let index = history.length - 1; index >= 0; index -= 1) {
-      const historyContent = history[index]?.content || "";
-      const matches = experience.filter((item) =>
-        companyMatchesQuestion(item.company, historyContent)
-      );
-      if (matches.length) return matches;
-    }
-  }
-
-  const asksForAllExperience =
-    questionWords.has("experience") && relevantWords.length === 0;
-  const asksForExperienceSkills =
-    questionWords.has("experience") &&
-    (questionWords.has("skill") || questionWords.has("skills"));
-
-  return asksForAllExperience || asksForExperienceSkills ? experience : [];
-}
-
-function isProjectTechnologyQuestion(question) {
-  const questionWords = new Set(normalizedWords(question));
-  const mentionsProject =
-    questionWords.has("project") || questionWords.has("projects");
-  const asksAboutTechnology = [
-    "skill",
-    "skills",
-    "technology",
-    "technologies",
-    "use",
-    "used",
-  ].some((word) => questionWords.has(word));
-
-  return mentionsProject && asksAboutTechnology;
-}
-
-function prioritizeSkillsForQuestion(skills, question) {
-  const questionText = normalizedWords(question).join(" ");
-  const questionWords = new Set(normalizedWords(question));
-
-  return skills
-    .map((skill, index) => {
-      const skillName = normalizedWords(skill.name).join(" ");
-      const skillNameWords = normalizedWords(skill.name);
-      const categoryWords = normalizedWords(skill.category);
-      const exactNameMatch = skillName && questionText.includes(skillName);
-      const relatedWordMatch = [...skillNameWords, ...categoryWords].some(
-        (word) => word.length > 1 && questionWords.has(word)
-      );
-
-      return {
-        skill,
-        index,
-        score: exactNameMatch ? 2 : relatedWordMatch ? 1 : 0,
-      };
-    })
-    .sort((left, right) => right.score - left.score || left.index - right.index)
-    .map(({ skill }) => skill);
-}
-
-function matchingSkillsForQuestion(skills, question) {
-  const questionText = normalizedWords(question).join(" ");
-  const questionWords = new Set(normalizedWords(question));
-
-  return skills.filter((skill) => {
-    const skillName = normalizedWords(skill.name).join(" ");
-    const skillNameWords = normalizedWords(skill.name);
-    const categoryWords = normalizedWords(skill.category);
-
-    return (
-      (skillName && questionText.includes(skillName)) ||
-      [...skillNameWords, ...categoryWords].some(
-        (word) => word.length > 1 && questionWords.has(word)
-      )
-    );
-  });
-}
-
-function isSkillFocusedQuestion(skills, question) {
-  const questionWords = new Set(normalizedWords(question));
-  const mentionsProject =
-    questionWords.has("project") || questionWords.has("projects");
-
-  if (mentionsProject) return false;
-  if (matchingSkillsForQuestion(skills, question).length) return true;
-
-  return [
-    "know",
-    "knows",
-    "skill",
-    "skills",
-    "technology",
-    "technologies",
-    "proficiency",
-    "level",
-    "experience",
-  ].some((word) => questionWords.has(word));
-}
-
-function buildCurrentSkillEvidence(skills, question) {
-  const questionWords = new Set(normalizedWords(question));
-  const includeUsage = [
-    "experience",
-    "how",
-    "use",
-    "used",
-    "using",
-    "work",
-    "worked",
-  ].some((word) => questionWords.has(word));
-  const relevantSkills = matchingSkillsForQuestion(skills, question);
-
-  if (!relevantSkills.length) {
-    const isProjectQuestion =
-      questionWords.has("project") || questionWords.has("projects");
-    const isSkillQuestion = [
-      "know",
-      "knows",
-      "skill",
-      "skills",
-      "technology",
-      "technologies",
-      "proficiency",
-      "level",
-      "experience",
-    ].some((word) => questionWords.has(word));
-
-    if (isProjectQuestion) {
-      return "No individual skill row directly answers this project question. Use only the verified project fields above, including LATEST PROJECT TECHNOLOGIES, and do not infer extra project-skill relationships.";
-    }
-
-    if (isSkillQuestion) {
-      return 'No matching public skill row exists for the skill or technology asked about. REQUIRED RESPONSE: "That skill or technology is not currently listed in Sujal\'s portfolio data." Do not say that Sujal does not know it.';
-    }
-
-    return "No direct skill-name or skill-category match was found. Use the full verified portfolio data and conversation history.";
-  }
-
-  const evidence = relevantSkills
-    .map((skill) => {
-      const description = projectField(skill.description, "");
-      const details = [
-        `Sujal knows ${projectField(skill.name)}.`,
-        `Category: ${projectField(skill.category)}.`,
-        `Proficiency: ${projectField(skill.proficiency)}.`,
-      ];
-
-      if (includeUsage && description) details.push(`Usage: ${description}`);
-
-      return `- ${details.join(" ")}`;
-    })
-    .join("\n");
-
-  const usageRule = includeUsage
-    ? `Your response is incomplete unless it names every matching skill and summarizes the Usage text for every matching row that has Usage. Do not answer with skill names or proficiency alone.`
-    : "Do not add usage details unless the user asks for them.";
-
-  return `VERIFIED SKILL INFORMATION IS AVAILABLE FOR THIS QUESTION. Do not answer that the information is unavailable.
-
-MATCHING PUBLIC SKILL ROWS (${relevantSkills.length} total):
-${evidence}
-
-STRICT CURRENT-QUESTION RULE: Answer using only the matching rows above. Mention all ${relevantSkills.length} matching skill name(s). Do not mention project technologies, earlier skills from conversation history, or any other skill. ${usageRule}`;
-}
-
-function buildProjectContext(projects) {
-  if (!projects.length) {
-    return "No public project information is currently available.";
-  }
-
-  return projects
-    .map((project, index) => {
-      const technologies = Array.isArray(project.technologies)
-        ? project.technologies
-            .map((technology) => projectField(technology, ""))
-            .filter(Boolean)
-            .join(", ") || "Not provided"
-        : projectField(project.technologies);
-
-      return [
-        `PROJECT ${index + 1}`,
-        `Name: ${projectField(project.name)}`,
-        `Date: ${projectField(project.project_date)}`,
-        `Summary: ${projectField(project.summary)}`,
-        `Description: ${projectField(project.description)}`,
-        `Technologies: ${technologies}`,
-        `GitHub: ${projectField(project.github_url)}`,
-        `Demo: ${projectField(project.demo_url)}`,
-        `Featured: ${project.featured === true ? "Yes" : "No"}`,
-      ].join("\n");
-    })
-    .join("\n\n");
-}
-
-function buildSkillsContext(skills) {
-  if (!skills.length) {
-    return "No public skill information is currently available.";
-  }
-
-  const skillsByCategory = new Map();
-
-  skills.forEach((skill) => {
-    const categoryLabel = projectField(skill.category, "Uncategorized");
-    const categoryKey = categoryLabel.toLocaleLowerCase();
-    const categoryGroup = skillsByCategory.get(categoryKey) || {
-      label: categoryLabel,
-      skills: [],
-    };
-    categoryGroup.skills.push(skill);
-    skillsByCategory.set(categoryKey, categoryGroup);
-  });
-
-  const skillIndex = Array.from(
-    skillsByCategory.values(),
-    ({ label, skills: categorySkills }) => {
-      const entries = categorySkills
-        .map(
-          (skill) =>
-            `${projectField(skill.name)} [${projectField(skill.proficiency)}]`
-        )
-        .join(", ");
-
-      return `${label}: ${entries}`;
-    }
-  ).join("\n");
-  return `SKILL INDEX (every named item is a skill Sujal knows; brackets contain proficiency):
-${skillIndex}
-
-Descriptions for skills relevant to the current question are supplied separately in CURRENT QUESTION SKILL EVIDENCE.`;
-}
-
-function buildExperienceContext(experience) {
-  if (!experience.length) {
-    return "No public experience information is currently available.";
-  }
-
-  return experience
-    .map((item, index) => {
-      const responsibilities = compactList(item.responsibilities);
-      const technologies = compactList(item.technologies);
-      const details = [
-        `EXPERIENCE ${index + 1}`,
-        `Company: ${projectField(item.company)}`,
-        `Role: ${projectField(item.role)}`,
-      ];
-      const type = projectField(item.experience_type, "");
-      const location = projectField(item.location, "");
-      const startDate = projectField(item.start_date, "");
-      const endDate = experienceEndLabel(item);
-      const summary = projectField(item.summary, "");
-
-      if (type) details.push(`Type: ${type}`);
-      if (location) details.push(`Location: ${location}`);
-      if (startDate) details.push(`Start: ${startDate}`);
-      if (endDate) details.push(`End: ${endDate}`);
-      details.push(`Current: ${item.is_current === true ? "Yes" : "No"}`);
-      if (summary) details.push(`Summary: ${summary}`);
-      if (responsibilities.length) {
-        details.push(
-          `Responsibilities:\n${responsibilities
-            .map((responsibility) => `- ${responsibility}`)
-            .join("\n")}`
-        );
-      }
-      if (technologies.length) {
-        details.push(`Technologies: ${technologies.join(", ")}`);
-      }
-
-      return details.join("\n");
-    })
-    .join("\n\n");
-}
-
-function buildCurrentExperienceEvidence(
-  experienceData,
-  skillData,
-  currentQuestion,
-  history
-) {
-  if (experienceData.status === "unavailable") {
-    return "Experience information is temporarily unavailable. Do not invent experience facts.";
-  }
-
-  const matchingExperience = matchingExperienceForQuestion(
-    experienceData.experience,
-    currentQuestion,
-    skillData,
-    history
-  );
-
-  if (!matchingExperience.length) {
-    if (isInternshipQuestion(currentQuestion)) {
-      return "No public experience row is classified as an internship. Do not name an internship company.";
-    }
-
-    return "No matching public experience row exists for the employer or experience asked about. Do not claim that Sujal worked there.";
-  }
-
-  return `Use only these matching experience rows for the current question:\n${buildExperienceContext(
-    matchingExperience
-  )}`;
-}
-
-function buildPortfolioContext(
-  projectData,
-  skillData,
-  experienceData,
-  currentQuestion,
-  history
-) {
-  const experienceFocused = isExperienceQuestion(
-    experienceData.experience,
-    currentQuestion
-  );
-  const skillFocused =
-    !experienceFocused &&
-    skillData.status === "available" &&
-    isSkillFocusedQuestion(skillData.skills, currentQuestion);
-  const projectContext =
-    skillFocused || experienceFocused
-      ? "Project details are intentionally omitted for this non-project question."
-      : projectData.status === "unavailable"
-      ? "Project information is temporarily unavailable."
-      : buildProjectContext(projectData.projects);
-  const skillContext =
-    skillData.status === "unavailable"
-      ? "Skill information is temporarily unavailable."
-      : isProjectTechnologyQuestion(currentQuestion)
-        ? "General skill records are not used for this project relationship question. Use only the project's verified Technologies field."
-        : buildSkillsContext(
-            prioritizeSkillsForQuestion(skillData.skills, currentQuestion)
-          );
-  const experienceContext =
-    experienceData.status === "unavailable"
-      ? "Experience information is temporarily unavailable."
-      : buildExperienceContext(experienceData.experience);
-
-  return `PROJECTS (newest first):
-${projectContext}
-
-SKILLS (grouped by category):
-${skillContext}
-
-EXPERIENCE (display order):
-${experienceContext}`;
-}
-
-function buildPortfolioSystemPrompt(
-  projectData,
-  skillData,
-  experienceData,
-  currentQuestion,
-  history
-) {
-  const experienceFocused = isExperienceQuestion(
-    experienceData.experience,
-    currentQuestion
-  );
-  const skillFocused =
-    !experienceFocused &&
-    skillData.status === "available" &&
-    isSkillFocusedQuestion(skillData.skills, currentQuestion);
-  const latestProject = projectData.projects[0];
-  const latestProjectTechnologies = Array.isArray(latestProject?.technologies)
-    ? latestProject.technologies
-        .map((technology) => projectField(technology, ""))
-        .filter(Boolean)
-        .join(", ")
-    : projectField(latestProject?.technologies, "");
-  const latestProjectAnswer =
-    skillFocused
-      ? "Omitted for this skill-only question."
-      : projectData.status === "available" && latestProject
-      ? `Sujal's most recent project is ${projectField(latestProject.name)}, dated ${projectField(latestProject.project_date)}.`
-      : "That information is not currently available in Sujal's portfolio data.";
-  const latestProjectTechnologyAnswer =
-    skillFocused
-      ? "Omitted for this skill-only question."
-      : projectData.status === "available" && latestProjectTechnologies
-      ? `The verified technologies listed for Sujal's most recent project are: ${latestProjectTechnologies}.`
-      : "No technologies are currently listed for Sujal's most recent project.";
-  const portfolioContext = buildPortfolioContext(
-    projectData,
-    skillData,
-    experienceData,
-    currentQuestion,
-    history
-  );
-  const currentSkillEvidence =
-    experienceFocused
-      ? "This is an experience-focused question. Use CURRENT QUESTION EXPERIENCE EVIDENCE instead."
-      : skillData.status === "available"
-      ? buildCurrentSkillEvidence(skillData.skills, currentQuestion)
-      : "Skill information is temporarily unavailable.";
-  const currentProjectEvidence = isProjectTechnologyQuestion(currentQuestion)
-    ? projectData.status === "available" && latestProjectTechnologies
-      ? `Most recent project: ${projectField(latestProject.name)}. The only verified technologies listed for this project are: ${latestProjectTechnologies}. STRICT CURRENT-PROJECT RULE: Answer using only this technology list. Do not infer technologies from SKILL INDEX.`
-      : "No technologies are currently listed for Sujal's most recent project. Do not infer any from SKILL INDEX."
-    : "";
-  const currentExperienceEvidence =
-    experienceFocused
-      ? buildCurrentExperienceEvidence(
-          experienceData,
-          skillData,
-          currentQuestion,
-          history
-        )
-      : "This is not an experience-focused question.";
-
-  return `You are Sujal Shakya's digital resume assistant.
-
-Answer visitor questions using the verified portfolio information supplied below. The supplied data currently contains information only about Sujal's projects, skills, and experience.
-
-Rules:
-1. Treat the supplied portfolio data as the only source of truth.
-2. Every item in SKILL INDEX is a skill Sujal knows. Brackets give the exact proficiency. For named-skill or category questions, if CURRENT QUESTION SKILL EVIDENCE contains bullets, answer only from those bullets and do not carry unrelated skills forward from conversation history.
-3. For questions about experience or how a skill was used, include the Usage text from CURRENT QUESTION SKILL EVIDENCE when present. Never invent missing usage details.
-4. Projects are newest first. For newest/latest/most-recent questions, use LATEST PROJECT ANSWER. For skills or technologies used in the most recent project, use only LATEST PROJECT TECHNOLOGIES; never infer project-skill relationships from SKILL INDEX.
-5. For employer, role, responsibility, date, current-status, or work-technology questions, use only CURRENT QUESTION EXPERIENCE EVIDENCE. Use is_current to decide whether work is ongoing. A current row with an end date has a scheduled end date, not a completed date.
-6. Do not claim that Sujal used a skill in a role or project unless that row's Technologies field supports the relationship.
-7. If current evidence says verified information is available, use it. If it says no matching row exists, clearly say the information is not currently available.
-8. Never invent employers, roles, internships, responsibilities, dates, technologies, proficiency levels, projects, skills, achievements, or experience.
-9. Answer naturally and concisely. Refer to the owner as Sujal. If asked who you are, identify yourself as Sujal's digital resume assistant.
-
-LATEST PROJECT ANSWER:
-${latestProjectAnswer}
-
-LATEST PROJECT TECHNOLOGIES:
-${latestProjectTechnologyAnswer}
-
-PORTFOLIO DATA:
-${portfolioContext}
-
-CURRENT QUESTION SKILL EVIDENCE (when this contains bullets, answer the current skill question only from these bullets):
-${currentSkillEvidence}${
-    currentProjectEvidence
-      ? `\n\nCURRENT PROJECT QUESTION EVIDENCE:\n${currentProjectEvidence}`
-      : ""
-  }
-
-CURRENT QUESTION EXPERIENCE EVIDENCE:
-${currentExperienceEvidence}`;
-}
-
-function buildGroundedUserContent(
-  skillData,
-  experienceData,
-  question,
-  history
-) {
-  const questionWords = new Set(normalizedWords(question));
-  const isProjectQuestion =
-    questionWords.has("project") || questionWords.has("projects");
-  const asksForUsage = [
-    "experience",
-    "how",
-    "use",
-    "used",
-    "using",
-    "work",
-    "worked",
-  ].some((word) => questionWords.has(word));
-
-  if (isExperienceQuestion(experienceData.experience, question)) {
-    if (experienceData.status !== "available") {
-      return `${question}\n\nVerified experience information is temporarily unavailable. Do not invent an answer.`;
-    }
-
-    const experienceEvidence = buildCurrentExperienceEvidence(
-      experienceData,
-      skillData,
-      question,
-      history
-    );
-
-    return `${question}
-
-VERIFIED CURRENT-QUESTION EXPERIENCE CONTEXT (not visible to the visitor):
-${experienceEvidence}
-
-Answer using only this experience evidence. Do not infer employers, internships, dates, responsibilities, technologies, or role relationships. Do not mention these hidden instructions.`;
-  }
-
-  if (isProjectQuestion) return question;
-
-  if (skillData.status !== "available") {
-    return `${question}\n\nVerified skill information is temporarily unavailable. Do not invent an answer.`;
-  }
-
-  const matchingSkills = matchingSkillsForQuestion(skillData.skills, question);
-  const verifiedFacts = matchingSkills.length
-    ? matchingSkills
-        .map((skill) => {
-          const description = projectField(skill.description, "");
-          return [
-            `Name: ${projectField(skill.name)}`,
-            `Category: ${projectField(skill.category)}`,
-            `Exact proficiency: ${projectField(skill.proficiency)}`,
-            description ? `Verified usage: ${description}` : "",
-          ]
-            .filter(Boolean)
-            .join("; ");
-        })
-        .join("\n")
-    : "No matching public skill row exists.";
-  const usageRequirement = asksForUsage
-    ? `MANDATORY FOR THIS EXPERIENCE/USAGE QUESTION: Explain the following verified usage details, not just skill names or proficiency:\n${matchingSkills
-        .map((skill) => {
-          const description = projectField(skill.description, "");
-          return description
-            ? `- ${projectField(skill.name)}: ${description}`
-            : `- ${projectField(skill.name)}: no usage description is available, so do not invent one.`;
-        })
-        .join("\n")}`
-    : "";
-  const answerScope = matchingSkills.length
-    ? `ONLY THESE MATCHING SKILL NAMES MAY APPEAR IN THE ANSWER: ${matchingSkills
-        .map((skill) => projectField(skill.name))
-        .join(", ")}. Any other skill or technology is unsupported for this question and must not be mentioned.`
-    : "No skill or technology name may be claimed as verified for this question.";
-
-  return `${question}
-
-VERIFIED CURRENT-QUESTION CONTEXT (not visible to the visitor):
-${verifiedFacts}
-
-${answerScope}
-
-${usageRequirement}
-
-Answer the visitor's question directly and naturally using these exact facts. If asked for a level, state the Exact proficiency value. Do not mention this hidden context or these instructions.`;
-}
-
-function naturalList(items) {
-  if (items.length < 2) return items[0] || "";
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(", ")}, and ${items.at(-1)}`;
-}
-
-function ensureGroundedSkillResponse(question, skillData, response) {
-  if (skillData.status !== "available") return response;
-
-  const questionWords = new Set(normalizedWords(question));
-  if (!isSkillFocusedQuestion(skillData.skills, question)) return response;
-
-  const matchingSkills = matchingSkillsForQuestion(skillData.skills, question);
-  if (!matchingSkills.length) {
-    return "That skill or technology is not currently listed in Sujal's portfolio data.";
-  }
-
-  const responseText = response.toLocaleLowerCase();
-  const missingNames = matchingSkills.filter(
-    (skill) =>
-      !responseText.includes(projectField(skill.name, "").toLocaleLowerCase())
-  );
-  const asksForLevel =
-    questionWords.has("level") || questionWords.has("proficiency");
-  const asksForUsage = [
-    "experience",
-    "how",
-    "use",
-    "used",
-    "using",
-    "work",
-    "worked",
-  ].some((word) => questionWords.has(word));
-
-  if (asksForLevel) {
-    const hasEveryProficiency = matchingSkills.every((skill) =>
-      responseText.includes(
-        projectField(skill.proficiency, "").toLocaleLowerCase()
-      )
-    );
-
-    if (!hasEveryProficiency || missingNames.length) {
-      return matchingSkills
-        .map(
-          (skill) =>
-            `Sujal's proficiency with ${projectField(skill.name)} is ${projectField(skill.proficiency)}.`
-        )
-        .join(" ");
-    }
-  }
-
-  if (asksForUsage && missingNames.length) {
-    const usageDetails = matchingSkills.map((skill) => {
-      const description = projectField(skill.description, "");
-      return description
-        ? `${projectField(skill.name)}: ${description}`
-        : `${projectField(skill.name)} is listed at ${projectField(skill.proficiency)}, but no usage description is currently available.`;
-    });
-
-    return `Sujal's relevant experience includes ${usageDetails.join(" ")}`;
-  }
-
-  if (missingNames.length) {
-    return `Sujal has listed ${naturalList(
-      matchingSkills.map((skill) => projectField(skill.name))
-    )} in his portfolio data.`;
-  }
-
-  return response;
-}
-
-function uniqueValues(values) {
-  const seen = new Set();
-
-  return values.filter((value) => {
-    const normalizedValue = projectField(value, "").toLocaleLowerCase();
-    if (!normalizedValue || seen.has(normalizedValue)) return false;
-    seen.add(normalizedValue);
-    return true;
-  });
-}
-
-function experienceDetailResponse(item, includeResponsibilities = false) {
-  const company = projectField(item.company);
-  const role = projectField(item.role);
-  const dateRange = experienceDateRange(item);
-  const summary = projectField(item.summary, "");
-  const responsibilities = compactList(item.responsibilities);
-  const technologies = compactList(item.technologies);
-  const details = [`${role} at ${company}${dateRange ? ` (${dateRange})` : ""}.`];
-
-  if (summary) details.push(summary);
-  if (includeResponsibilities && responsibilities.length) {
-    details.push(
-      `Listed responsibilities included: ${responsibilities
-        .slice(0, 4)
-        .join("; ")}.`
-    );
-  }
-  if (!includeResponsibilities && technologies.length) {
-    details.push(`Listed technologies: ${technologies.join(", ")}.`);
-  }
-
-  return details.join(" ");
-}
-
-function ensureGroundedExperienceResponse(
-  question,
-  skillData,
-  experienceData,
-  response,
-  history
-) {
-  if (experienceData.status !== "available") return response;
-  if (!isExperienceQuestion(experienceData.experience, question)) return response;
-
-  const questionWords = new Set(normalizedWords(question));
-  let matchingExperience = matchingExperienceForQuestion(
-    experienceData.experience,
-    question,
-    skillData,
-    history
-  );
-
-  if (isInternshipQuestion(question)) {
-    matchingExperience = experienceData.experience.filter(isInternshipExperience);
-    if (!matchingExperience.length) {
-      return "No internship is currently listed in Sujal's portfolio experience data.";
-    }
-  }
-
-  const asksForGenericCompanies =
-    (questionWords.has("company") || questionWords.has("employer")) &&
-    !/\b(?:work|worked|working)\s+(?:at|for)\s+[^?]+/i.test(question);
-  if (!matchingExperience.length && asksForGenericCompanies) {
-    matchingExperience = experienceData.experience;
-  }
-
-  if (!matchingExperience.length) {
-    const asksAboutSpecificEmployer =
-      /\b(?:work|worked|working)\s+(?:at|for|on)\s+[^?]+/i.test(question) ||
-      questionWords.has("company") ||
-      questionWords.has("employer");
-
-    return asksAboutSpecificEmployer
-      ? "That employer or experience is not currently listed in Sujal's portfolio data."
-      : "That experience information is not currently available in Sujal's portfolio data.";
-  }
-
-  const asksCurrentStatus = ["current", "currently", "ongoing", "still"].some(
-    (word) => questionWords.has(word)
-  );
-  if (asksCurrentStatus) {
-    return matchingExperience
-      .map((item) => {
-        const company = projectField(item.company);
-        const role = projectField(item.role);
-        const endDate = projectField(item.end_date, "");
-
-        if (item.is_current === true) {
-          return endDate
-            ? `Yes. Sujal's ${role} experience with ${company} is currently ongoing; ${endDate} is listed as the scheduled end date.`
-            : `Yes. Sujal's ${role} experience with ${company} is currently ongoing.`;
-        }
-
-        return `No. Sujal's ${role} experience with ${company} is not marked as current in his portfolio data.`;
-      })
-      .join(" ");
-  }
-
-  const asksForTechnologies =
-    questionWords.has("technology") ||
-    questionWords.has("technologies") ||
-    (questionWords.has("experience") &&
-      (questionWords.has("skill") || questionWords.has("skills"))) ||
-    (questionWords.has("there") &&
-      (questionWords.has("use") || questionWords.has("used")));
-  if (asksForTechnologies) {
-    const technologies = uniqueValues(
-      matchingExperience.flatMap((item) => compactList(item.technologies))
-    );
-
-    return technologies.length
-      ? `The technologies explicitly listed for this experience are ${naturalList(
-          technologies
-        )}.`
-      : "No technologies are currently listed for that experience in Sujal's portfolio data.";
-  }
-
-  const asksForResponsibilities =
-    questionWords.has("responsibility") ||
-    questionWords.has("responsibilities") ||
-    /\bwhat\s+did\s+sujal\s+do\b/i.test(question);
-  if (asksForResponsibilities) {
-    return matchingExperience
-      .map((item) => experienceDetailResponse(item, true))
-      .join(" ");
-  }
-
-  const genericExperienceQuestion =
-    questionWords.has("experience") &&
-    matchingExperience.length === experienceData.experience.length;
-
-  return matchingExperience
-    .map((item) =>
-      experienceDetailResponse(item, !genericExperienceQuestion)
-    )
-    .join(" ");
-}
-
 async function getOrCreateEngine(onProgress) {
   if (engine) return engine;
 
@@ -1141,13 +188,14 @@ async function getOrCreateEngine(onProgress) {
 
   if (!modelLoadingPromise) {
     console.log("Starting Llama 3.2 1B...");
-    console.log("MODEL_ID", MODEL_ID);                    
-    modelLoadingPromise = CreateMLCEngine(MODEL_ID, {
-      initProgressCallback: (progress) => {
-        console.log("Loading:", progress);
-        modelProgressListeners.forEach((listener) => listener(progress));
-      },
-    })
+    console.log("MODEL_ID", MODEL_ID);
+    modelLoadingPromise = import("https://esm.run/@mlc-ai/web-llm")
+      .then(({ CreateMLCEngine }) => CreateMLCEngine(MODEL_ID, {
+        initProgressCallback: (progress) => {
+          console.log("Loading:", progress);
+          modelProgressListeners.forEach((listener) => listener(progress));
+        },
+      }))
       .then((createdEngine) => {
         engine = createdEngine;
         console.log("Model loaded!");
@@ -1273,6 +321,7 @@ const resumeData = {
       school: "Minnesota State University, Mankato",
       program: "Bachelor of Science in Computer Science",
       date: "2024 - Present",
+      expectedGraduation: "May 2028",
       details: [
         {
           label: "Academic Focus",
@@ -2020,121 +1069,81 @@ function modelLoadingText(progress) {
     : "Loading AI model...";
 }
 
+function currentKnowledge(projectData, skillData, experienceData) {
+  return buildKnowledgeItems({
+    projects: projectData?.projects || cachedProjects || [],
+    skills: skillData?.skills || cachedSkills || [],
+    experience: experienceData?.experience || cachedExperience || [],
+    resume: resumeData,
+    status: {
+      projects: projectData?.status || (projectDataStatus === "available" ? "available" : "unavailable"),
+      skills: skillData?.status || (skillDataStatus === "available" ? "available" : "unavailable"),
+      experience: experienceData?.status || (experienceDataStatus === "available" ? "available" : "unavailable"),
+    },
+  });
+}
+
+function appendRefusalSuggestions() {
+  const suggestions = document.createElement("div");
+  suggestions.className = "suggestion-list refusal-suggestions";
+  suggestions.setAttribute("aria-label", "Questions about Sujal");
+  ASSISTANT_CONFIG.suggestions.forEach((question) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = question;
+    button.addEventListener("click", () => {
+      if (isGenerating) return;
+      assistantInput.value = question;
+      sendChatMessage();
+    });
+    suggestions.appendChild(button);
+  });
+  chatWindow.appendChild(suggestions);
+  scrollChatToLatest();
+}
+
 async function sendChatMessage() {
   if (isGenerating) return;
-
   const content = assistantInput.value.trim();
   if (!content) return;
 
   setChatBusy(true);
   appendChatMessage(content, "user");
   assistantInput.value = "";
-
-  const userMessage = { role: "user", content };
-  messages.push(userMessage);
-  const statusMessage = appendChatMessage(
-    engine ? "Thinking..." : "Loading AI model...",
-    "assistant",
-    true
-  );
+  let statusMessage;
 
   try {
-    if (!navigator.gpu) {
-      console.error("WebGPU is unavailable in this browser.");
-      setStatusMessage(
-        statusMessage,
-        "This AI assistant requires a browser with WebGPU support."
-      );
-      messages.pop();
-      return;
-    }
-
-    let chatEngine;
-    let projectData;
-    let skillData;
-    let experienceData;
-
-    try {
-      [chatEngine, projectData, skillData, experienceData] = await Promise.all([
-        getOrCreateEngine((progress) => {
-          setStatusMessage(statusMessage, modelLoadingText(progress));
-        }),
-        getProjects(),
-        getSkills(),
-        getExperience(),
+    let knowledgeItems = currentKnowledge();
+    let turn = prepareTurn(content, messages, knowledgeItems);
+    if (turn.scope === IN_SCOPE) {
+      statusMessage = appendChatMessage("Checking Sujal's resume...", "assistant", true);
+      const [projectData, skillData, experienceData] = await Promise.all([
+        getProjects(), getSkills(), getExperience(),
       ]);
-    } catch (error) {
-      console.error("Failed to load the WebLLM model:", error);
-      setStatusMessage(
-        statusMessage,
-        "The AI model could not be loaded. Please try again."
-      );
-      messages.pop();
-      return;
+      knowledgeItems = currentKnowledge(projectData, skillData, experienceData);
+      turn = prepareTurn(content, messages, knowledgeItems);
     }
 
-    setStatusMessage(statusMessage, "Thinking...");
-
-    try {
-      const priorMessages = messages.slice(0, -1);
-      const messagesForModel = [
-        {
-          role: "system",
-          content: buildPortfolioSystemPrompt(
-            projectData,
-            skillData,
-            experienceData,
-            content,
-            priorMessages
-          ),
-        },
-        ...priorMessages,
-        {
-          role: "user",
-          content: buildGroundedUserContent(
-            skillData,
-            experienceData,
-            content,
-            priorMessages
-          ),
-        },
-      ];
-      const response = await chatEngine.chat.completions.create({
-        messages: messagesForModel,
-        temperature: 0,
-        max_tokens: 160,
+    // The gate runs before model import, loading, or inference. Output is fully
+    // buffered and validated; no untrusted model tokens reach the DOM.
+    const assistantResponse = await answerTurn(turn, messages, knowledgeItems, async () => {
+      if (!navigator.gpu) throw new Error("WebGPU unavailable; using resume records.");
+      setStatusMessage(statusMessage, engine ? "Thinking..." : "Loading AI model...");
+      const chatEngine = await getOrCreateEngine((progress) => {
+        setStatusMessage(statusMessage, modelLoadingText(progress));
       });
-      const generatedResponse = response.choices[0].message.content?.trim();
+      setStatusMessage(statusMessage, "Thinking...");
+      return chatEngine;
+    });
 
-      if (!generatedResponse) {
-        throw new Error("WebLLM returned an empty assistant response.");
-      }
-
-      const assistantResponse = isExperienceQuestion(
-        experienceData.experience,
-        content
-      )
-        ? ensureGroundedExperienceResponse(
-            content,
-            skillData,
-            experienceData,
-            generatedResponse,
-            priorMessages
-          )
-        : ensureGroundedSkillResponse(content, skillData, generatedResponse);
-
-      messages.push({ role: "assistant", content: assistantResponse });
-      statusMessage.remove();
-      appendChatMessage(assistantResponse, "assistant");
-    } catch (error) {
-      console.error("Failed to generate a WebLLM response:", error);
-      setStatusMessage(
-        statusMessage,
-        "Something went wrong while generating the response. Please try again."
-      );
-      messages.pop();
+    statusMessage?.remove();
+    appendChatMessage(assistantResponse, "assistant");
+    recordTurn(messages, turn, assistantResponse);
+    if (turn.scope === OUT_OF_SCOPE || assistantResponse === ASSISTANT_CONFIG.refusal) {
+      appendRefusalSuggestions();
     }
   } finally {
+    statusMessage?.remove();
     setChatBusy(false);
     assistantInput.focus();
   }

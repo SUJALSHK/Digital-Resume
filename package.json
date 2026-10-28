@@ -1,5 +1,14 @@
 {
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.85"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.5"
   }
 }

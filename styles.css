@@ -1345,6 +1345,11 @@ button {
   background: var(--accent-soft);
 }
 
+.refusal-suggestions {
+  width: 100%;
+  flex-shrink: 0;
+}
+
 .assistant-input {
   gap: 10px;
 }
