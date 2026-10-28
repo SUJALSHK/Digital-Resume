@@ -1,0 +1,86 @@
+[
+  {
+    "viewport": "1024x768-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "1024x768-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "1440x900-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "1440x900-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "360x740-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "360x740-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "390x844-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "390x844-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "430x932-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "430x932-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "768x1024-dark",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  },
+  {
+    "viewport": "768x1024-light",
+    "accessibility": 100,
+    "failedAudits": [],
+    "modelRequests": 0,
+    "javascriptErrors": 0
+  }
+]

@@ -8,10 +8,12 @@ Native HTML, CSS and JavaScript with public Supabase resume records and browser-
 npm ci
 npm test
 npm run build
-python3 -m http.server 5500 --bind 127.0.0.1
+npm run preview
 ```
 
-Open `http://127.0.0.1:5500/dist/` to inspect the build, or `/` for the source. The build copies the existing static app and required assets to `dist`; it adds no framework. Serve over localhost or HTTPS for WebGPU. The browser downloads the model on its first supported question; greetings and refusals do not load it.
+Open `http://127.0.0.1:4173/` to inspect the production output. The build copies the existing static app and required assets to `dist`; it adds no framework. Serve over localhost or HTTPS for WebGPU. The browser downloads the model on its first supported question; opening the mobile chat, greetings and refusals do not load it.
+
+The editorial layout uses a sticky desktop chat panel at 1024px and above and the same component in a mobile bottom sheet below that breakpoint. See [the UI review](UI-REVIEW.md) for design tokens, screenshots, verification, and unchanged copy/data issues.
 
 ## Assistant restrictions
 

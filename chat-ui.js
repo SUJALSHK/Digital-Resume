@@ -36,6 +36,7 @@ export function initializeChatUI() {
     if (!viewport || !media.matches || !isOpen) return;
     panel.style.setProperty('--chat-viewport-height', `${viewport.height}px`);
     panel.style.setProperty('--chat-keyboard-offset', `${Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)}px`);
+    panel.dataset.compact = String(viewport.height < 560);
   }
 
   function lockScroll() {
@@ -76,6 +77,7 @@ export function initializeChatUI() {
       unlockScroll();
       panel.style.removeProperty('--chat-viewport-height');
       panel.style.removeProperty('--chat-keyboard-offset');
+      delete panel.dataset.compact;
     }
     if (panel.hidden && panel.contains(document.activeElement)) launcher.focus({ preventScroll: true });
     if (!media.matches && document.activeElement === closeButton) input.focus({ preventScroll: true });
