@@ -1,3 +1,4 @@
+import { initializeChatUI } from "./chat-ui.js";
 import { ASSISTANT_CONFIG } from "./assistant-config.js";
 import { IN_SCOPE, OUT_OF_SCOPE, buildKnowledgeItems, prepareTurn, answerTurn, recordTurn } from "./assistant-policy.js";
 import { createClient } from "https://esm.run/@supabase/supabase-js@2";
@@ -390,20 +391,19 @@ const root = document.documentElement;
 const themeToggle = document.querySelector(".theme-toggle");
 const menuToggle = document.querySelector(".menu-toggle");
 const profileLinks = document.querySelector("#profileLinks");
-const assistantInput = document.querySelector(".assistant-input input");
+const assistantInput = document.querySelector(".assistant-input textarea");
 const assistantSendButton = document.querySelector(".assistant-input button");
 const chatWindow = document.querySelector(".chat-window");
 
-const savedTheme = localStorage.getItem("resume-theme");
-const preferredTheme = "dark";
-
-root.dataset.theme = savedTheme || preferredTheme;
+const chatUI = initializeChatUI();
 
 function toggleTheme() {
   const nextTheme = root.dataset.theme === "dark" ? "light" : "dark";
   root.dataset.theme = nextTheme;
-  localStorage.setItem("resume-theme", nextTheme);
+  themeToggle.setAttribute("aria-label", `Switch to ${nextTheme === "dark" ? "light" : "dark"} theme`);
+  try { localStorage.setItem("resume-theme", nextTheme); } catch { /* Private browsing can disable storage. */ }
 }
+themeToggle.setAttribute("aria-label", `Switch to ${root.dataset.theme === "dark" ? "light" : "dark"} theme`);
 
 function toggleMenu() {
   const isOpen = profileLinks.classList.toggle("is-open");
@@ -416,522 +416,37 @@ function closeMenu() {
 }
 
 function renderSkills() {
-  const skillGroups = document.querySelector("#skillGroups");
-
-  skillGroups.innerHTML = resumeData.skills
-    .map(
-      (skillGroup) => `
-        <div class="skill-group">
-          <h3>${skillGroup.group}</h3>
-          <div class="skill-tags">
-            ${skillGroup.items.map((item) => `<span class="skill-tag">${item}</span>`).join("")}
-          </div>
-        </div>
-      `
-    )
-    .join("");
+  document.querySelector("#skillGroups").innerHTML = resumeData.skills.map((group) => `
+    <div class="skill-group"><dt>${group.group}</dt><dd>${group.items.join(", ")}</dd></div>
+  `).join("");
 }
 
 function renderExperience() {
-  const experienceList = document.querySelector("#experienceList");
-
-  experienceList.innerHTML = resumeData.experience
-    .map(
-      (job) => `
-        <article class="experience-item">
-          <span class="item-date">${job.date}</span>
-          <div class="experience-body">
-            <h3>${job.role}</h3>
-            <h4>${job.company}</h4>
-            <ul>
-              ${job.points.map((point) => `<li>${point}</li>`).join("")}
-            </ul>
-          </div>
-        </article>
-      `
-    )
-    .join("");
-}
-
-function createProjectCard(project, projectIndex, isClone = false) {
-  const linkTabIndex = isClone ? ' tabindex="-1"' : "";
-
-  return `
-    <article
-      class="project-item"
-      data-project-index="${projectIndex}"
-      data-clone="${isClone}"
-      role="group"
-      aria-roledescription="slide"
-      aria-label="${projectIndex + 1} of ${resumeData.projects.length}: ${project.title}"
-      aria-hidden="true"
-    >
-      ${
-        project.image
-          ? `<div class="project-thumb">
-              <img src="${project.image}" alt="${project.imageAlt}" loading="lazy" decoding="async" />
-            </div>`
-          : `<div class="project-thumb project-thumb-fallback" role="img" aria-label="${project.title} preview">
-              <span>${project.previewLabel}</span>
-              <strong>${project.previewText}</strong>
-            </div>`
-      }
-      <div class="project-body">
-        <h3>${project.title}</h3>
-        <p>${project.description}</p>
-        <div class="project-tags" aria-label="Technologies used">
-          ${project.tags.map((tag) => `<span class="project-tag">${tag}</span>`).join("")}
-        </div>
-        <div class="project-actions">
-          ${
-            project.liveUrl
-              ? `<a href="${project.liveUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} live demo in a new tab"${linkTabIndex}>View Project</a>`
-              : ""
-          }
-          ${
-            project.githubUrl
-              ? `<a href="${project.githubUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} source code on GitHub in a new tab"${linkTabIndex}>GitHub</a>`
-              : ""
-          }
-        </div>
+  document.querySelector("#experienceList").innerHTML = resumeData.experience.map((job) => `
+    <li class="experience-item">
+      <span class="item-date">${job.date}</span>
+      <div class="experience-body">
+        <h3>${job.role}</h3><h4>${job.company}</h4>
+        <ul>${job.points.map((point) => `<li>${point}</li>`).join("")}</ul>
       </div>
-    </article>
-  `;
-}
-
-function initializeProjectCarousel(carousel) {
-  const viewport = carousel.querySelector(".project-viewport");
-  const track = carousel.querySelector(".project-track");
-  const cards = Array.from(track.querySelectorAll(".project-item"));
-  const dots = Array.from(carousel.querySelectorAll(".carousel-dot"));
-  const previousButton = carousel.querySelector(".carousel-arrow-previous");
-  const nextButton = carousel.querySelector(".carousel-arrow-next");
-  const status = carousel.querySelector(".carousel-status");
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  const projectCount = resumeData.projects.length;
-  const originalStartIndex = 2;
-  const autoplayDelay = 1000;
-  const abortController = new AbortController();
-  const listenerOptions = { signal: abortController.signal };
-
-  let trackIndex = originalStartIndex;
-  let currentTranslate = 0;
-  let autoplayTimer = null;
-  let isAnimating = false;
-  let isPointerDown = false;
-  let isDragging = false;
-  let isHovered = false;
-  let isFocusWithin = false;
-  let queuedDirection = 0;
-  let lastMoveSource = "initial";
-  let pointerId = null;
-  let dragStartX = 0;
-  let dragStartY = 0;
-  let dragDelta = 0;
-  let suppressClick = false;
-  let resizeFrame = null;
-
-  function activeProjectIndex() {
-    return Number(cards[trackIndex].dataset.projectIndex);
-  }
-
-  function shouldAutoplay() {
-    return (
-      !reducedMotion.matches &&
-      !isHovered &&
-      !isFocusWithin &&
-      !isPointerDown &&
-      !document.hidden
-    );
-  }
-
-  function stopAutoplay() {
-    if (autoplayTimer !== null) {
-      window.clearInterval(autoplayTimer);
-      autoplayTimer = null;
-    }
-  }
-
-  function startAutoplay() {
-    stopAutoplay();
-    if (!shouldAutoplay()) return;
-
-    autoplayTimer = window.setInterval(() => {
-      moveBy(1, "auto");
-    }, autoplayDelay);
-  }
-
-  function setInteractiveState(card, isActive) {
-    const isClone = card.dataset.clone === "true";
-    const canInteract = isActive && !isClone;
-
-    card.setAttribute("aria-hidden", String(!canInteract));
-    card.querySelectorAll("a, button").forEach((control) => {
-      control.tabIndex = canInteract ? 0 : -1;
-    });
-  }
-
-  function updateProjectStates(announce = false) {
-    cards.forEach((card, index) => {
-      const distance = Math.abs(index - trackIndex);
-      const isActive = distance === 0;
-
-      card.classList.toggle("is-active", isActive);
-      card.classList.toggle("is-adjacent", distance === 1);
-      card.classList.toggle("is-before", index < trackIndex);
-      card.classList.toggle("is-after", index > trackIndex);
-      setInteractiveState(card, isActive);
-    });
-
-    const projectIndex = activeProjectIndex();
-    dots.forEach((dot, index) => {
-      const isCurrent = index === projectIndex;
-      dot.classList.toggle("is-active", isCurrent);
-      dot.setAttribute("aria-current", isCurrent ? "true" : "false");
-    });
-
-    if (announce) {
-      status.textContent = `${resumeData.projects[projectIndex].title}, project ${projectIndex + 1} of ${projectCount}`;
-    }
-  }
-
-  function updateTrackPosition(animate = true) {
-    const activeCard = cards[trackIndex];
-    const viewportBounds = viewport.getBoundingClientRect();
-    const cardBounds = activeCard.getBoundingClientRect();
-    const distanceToCenter =
-      viewportBounds.left +
-      viewportBounds.width / 2 -
-      (cardBounds.left + cardBounds.width / 2);
-    const centeredOffset = currentTranslate + distanceToCenter;
-
-    carousel.classList.toggle("is-resetting", !animate);
-    currentTranslate = centeredOffset;
-    track.style.transform = `translate3d(${centeredOffset}px, 0, 0)`;
-
-    if (!animate) {
-      track.getBoundingClientRect();
-      requestAnimationFrame(() => carousel.classList.remove("is-resetting"));
-    }
-  }
-
-  function finishTransition() {
-    const movedToLeadingClone = trackIndex === originalStartIndex - 1;
-    const movedToTrailingClone = trackIndex === originalStartIndex + projectCount;
-
-    isAnimating = false;
-
-    if (movedToLeadingClone) {
-      trackIndex = originalStartIndex + projectCount - 1;
-      updateProjectStates();
-      updateTrackPosition(false);
-    } else if (movedToTrailingClone) {
-      trackIndex = originalStartIndex;
-      updateProjectStates();
-      updateTrackPosition(false);
-    }
-
-    if (queuedDirection !== 0) {
-      const direction = queuedDirection;
-      queuedDirection = 0;
-      requestAnimationFrame(() => moveBy(direction, "manual"));
-      return;
-    }
-
-    if (lastMoveSource !== "auto") startAutoplay();
-  }
-
-  function moveBy(direction, source = "manual") {
-    if (isAnimating || isDragging) {
-      if (source !== "auto") queuedDirection = direction;
-      return;
-    }
-
-    if (source !== "auto") stopAutoplay();
-
-    lastMoveSource = source;
-    isAnimating = !reducedMotion.matches;
-    trackIndex += direction;
-    updateProjectStates(source !== "auto");
-    updateTrackPosition(true);
-
-    if (!isAnimating) finishTransition();
-  }
-
-  function moveToProject(projectIndex) {
-    if (isAnimating || isDragging || projectIndex === activeProjectIndex()) return;
-
-    stopAutoplay();
-    lastMoveSource = "manual";
-    isAnimating = !reducedMotion.matches;
-    trackIndex = originalStartIndex + projectIndex;
-    updateProjectStates(true);
-    updateTrackPosition(true);
-
-    if (!isAnimating) finishTransition();
-  }
-
-  function releasePointer(event) {
-    if (!isPointerDown || event.pointerId !== pointerId) return;
-
-    const wasDragging = isDragging;
-    const threshold = Math.min(90, viewport.clientWidth * 0.14);
-    const direction = Math.abs(dragDelta) >= threshold ? (dragDelta < 0 ? 1 : -1) : 0;
-
-    isPointerDown = false;
-    isDragging = false;
-    pointerId = null;
-    carousel.classList.remove("is-dragging");
-
-    if (wasDragging) {
-      suppressClick = true;
-      currentTranslate += dragDelta;
-
-      if (direction !== 0) {
-        moveBy(direction, "manual");
-      } else {
-        lastMoveSource = "manual";
-        isAnimating = !reducedMotion.matches;
-        updateTrackPosition(true);
-        if (!isAnimating) finishTransition();
-      }
-
-      requestAnimationFrame(() => {
-        suppressClick = false;
-      });
-    } else {
-      startAutoplay();
-    }
-  }
-
-  previousButton.addEventListener("click", () => moveBy(-1), listenerOptions);
-  nextButton.addEventListener("click", () => moveBy(1), listenerOptions);
-
-  dots.forEach((dot) => {
-    dot.addEventListener(
-      "click",
-      () => moveToProject(Number(dot.dataset.projectIndex)),
-      listenerOptions
-    );
-  });
-
-  viewport.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      moveBy(event.key === "ArrowRight" ? 1 : -1);
-    },
-    listenerOptions
-  );
-
-  viewport.addEventListener(
-    "pointerdown",
-    (event) => {
-      if (isAnimating || event.target.closest("a, button")) return;
-
-      stopAutoplay();
-      isPointerDown = true;
-      pointerId = event.pointerId;
-      dragStartX = event.clientX;
-      dragStartY = event.clientY;
-      dragDelta = 0;
-      viewport.setPointerCapture?.(pointerId);
-    },
-    listenerOptions
-  );
-
-  viewport.addEventListener(
-    "pointermove",
-    (event) => {
-      if (!isPointerDown || event.pointerId !== pointerId) return;
-
-      const horizontalDistance = event.clientX - dragStartX;
-      const verticalDistance = event.clientY - dragStartY;
-
-      if (!isDragging && Math.abs(verticalDistance) > Math.abs(horizontalDistance)) return;
-      if (!isDragging && Math.abs(horizontalDistance) < 6) return;
-
-      isDragging = true;
-      dragDelta = horizontalDistance;
-      carousel.classList.add("is-dragging");
-      track.style.transform = `translate3d(${currentTranslate + dragDelta}px, 0, 0)`;
-    },
-    listenerOptions
-  );
-
-  viewport.addEventListener("pointerup", releasePointer, listenerOptions);
-  viewport.addEventListener("pointercancel", releasePointer, listenerOptions);
-  viewport.addEventListener(
-    "click",
-    (event) => {
-      if (!suppressClick) return;
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    { capture: true, signal: abortController.signal }
-  );
-
-  carousel.addEventListener(
-    "mouseenter",
-    () => {
-      isHovered = true;
-      stopAutoplay();
-    },
-    listenerOptions
-  );
-  carousel.addEventListener(
-    "mouseleave",
-    () => {
-      isHovered = false;
-      startAutoplay();
-    },
-    listenerOptions
-  );
-  carousel.addEventListener(
-    "focusin",
-    () => {
-      isFocusWithin = true;
-      stopAutoplay();
-    },
-    listenerOptions
-  );
-  carousel.addEventListener(
-    "focusout",
-    (event) => {
-      if (carousel.contains(event.relatedTarget)) return;
-      isFocusWithin = false;
-      startAutoplay();
-    },
-    listenerOptions
-  );
-
-  track.addEventListener(
-    "transitionend",
-    (event) => {
-      if (event.target === track && event.propertyName === "transform") {
-        finishTransition();
-      }
-    },
-    listenerOptions
-  );
-
-  document.addEventListener(
-    "visibilitychange",
-    () => {
-      if (document.hidden) stopAutoplay();
-      else startAutoplay();
-    },
-    listenerOptions
-  );
-
-  const recalculatePosition = () => {
-    window.cancelAnimationFrame(resizeFrame);
-    resizeFrame = window.requestAnimationFrame(() => updateTrackPosition(false));
-  };
-  const resizeObserver =
-    "ResizeObserver" in window ? new ResizeObserver(recalculatePosition) : null;
-
-  if (resizeObserver) resizeObserver.observe(viewport);
-  else window.addEventListener("resize", recalculatePosition, listenerOptions);
-
-  const handleMotionPreference = () => {
-    if (reducedMotion.matches) stopAutoplay();
-    else startAutoplay();
-  };
-  reducedMotion.addEventListener?.("change", handleMotionPreference, listenerOptions);
-
-  updateProjectStates();
-  updateTrackPosition(false);
-  startAutoplay();
-
-  return () => {
-    stopAutoplay();
-    window.cancelAnimationFrame(resizeFrame);
-    resizeObserver?.disconnect();
-    abortController.abort();
-  };
+    </li>
+  `).join("");
 }
 
 function renderProjects() {
-  const projectList = document.querySelector("#projectList");
-  const projectCount = resumeData.projects.length;
-  const leadingProjects = resumeData.projects.slice(-2);
-  const trailingProjects = resumeData.projects.slice(0, 2);
-  const carouselProjects = [
-    ...leadingProjects.map((project, index) => ({
-      project,
-      projectIndex: projectCount - leadingProjects.length + index,
-      isClone: true,
-    })),
-    ...resumeData.projects.map((project, projectIndex) => ({
-      project,
-      projectIndex,
-      isClone: false,
-    })),
-    ...trailingProjects.map((project, projectIndex) => ({
-      project,
-      projectIndex,
-      isClone: true,
-    })),
-  ];
-
-  projectList.innerHTML = `
-    <div class="project-carousel" role="region" aria-roledescription="carousel" aria-label="Selected projects">
-      <div
-        class="project-viewport"
-        tabindex="0"
-        aria-label="Project carousel. Use the left and right arrow keys to navigate."
-      >
-        <div class="project-track" id="projectTrack">
-          ${carouselProjects
-            .map(({ project, projectIndex, isClone }) =>
-              createProjectCard(project, projectIndex, isClone)
-            )
-            .join("")}
+  document.querySelector("#projectList").innerHTML = resumeData.projects.map((project) => `
+    <li class="project-item">
+      <div class="project-heading">
+        <h3>${project.title}</h3>
+        <div class="project-actions">
+          ${project.liveUrl ? `<a href="${project.liveUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} live">Live</a>` : ""}
+          ${project.githubUrl ? `<a href="${project.githubUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} source">Source</a>` : ""}
         </div>
       </div>
-
-      <div class="carousel-navigation">
-        <button
-          class="carousel-arrow carousel-arrow-previous"
-          type="button"
-          aria-label="Show previous project"
-          aria-controls="projectTrack"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
-        </button>
-
-        <div class="carousel-dots" aria-label="Choose a project">
-          ${resumeData.projects
-            .map(
-              (project, index) => `
-                <button
-                  class="carousel-dot"
-                  type="button"
-                  data-project-index="${index}"
-                  aria-label="Show ${project.title}"
-                ></button>
-              `
-            )
-            .join("")}
-        </div>
-
-        <button
-          class="carousel-arrow carousel-arrow-next"
-          type="button"
-          aria-label="Show next project"
-          aria-controls="projectTrack"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
-        </button>
-      </div>
-
-      <p class="carousel-status sr-only" aria-live="polite" aria-atomic="true"></p>
-    </div>
-  `;
-
-  return initializeProjectCarousel(projectList.querySelector(".project-carousel"));
+      <p class="project-description">${project.description.split(/(?<=\.)\s/)[0]}</p>
+      <p class="project-technologies">${project.tags.join(" · ")}</p>
+    </li>
+  `).join("");
 }
 
 function renderEducation() {
@@ -941,14 +456,14 @@ function renderEducation() {
     .map(
       (item) => `
         <article class="education-entry">
-          <span class="item-date">${item.date}</span>
-          <h3>${item.school}</h3>
-          <h4>${item.program}</h4>
+          <h3>${item.program}</h3>
+          <h4>${item.school}</h4>
+          <span class="item-date">${item.expectedGraduation ? `Expected graduation: ${item.expectedGraduation}` : item.date}</span>
           ${item.summary ? `<p class="education-summary">${item.summary}</p>` : ""}
           ${
             item.technologies
               ? `<div class="education-tech" aria-label="Project technologies">
-                  ${item.technologies.map((technology) => `<span>${technology}</span>`).join("")}
+                  ${item.technologies.join(" · ")}
                 </div>`
               : ""
           }
@@ -991,29 +506,11 @@ function renderCertifications() {
 }
 
 function renderContact() {
-  const contactGrid = document.querySelector("#contactGrid");
-
-  contactGrid.innerHTML = resumeData.contact
-    .map((item) => {
-      const content = `
-        <span class="contact-icon">${item.icon}</span>
-        <span class="contact-copy">
-          <span class="contact-label">${item.label}</span>
-          <strong>${item.value}</strong>
-        </span>
-      `;
-
-      if (!item.href) {
-        return `<div class="contact-item">${content}</div>`;
-      }
-
-      const externalAttributes = item.href.startsWith("http")
-        ? 'target="_blank" rel="noopener noreferrer"'
-        : "";
-
-      return `<a class="contact-item" href="${item.href}" ${externalAttributes}>${content}</a>`;
-    })
-    .join("");
+  document.querySelector("#contactGrid").innerHTML = resumeData.contact.map((item) => `
+    <div class="contact-item"><dt>${item.label}</dt><dd>${item.href
+      ? `<a href="${item.href}" ${item.href.startsWith("http") ? 'target="_blank" rel="noopener noreferrer"' : ""}>${item.value}</a>`
+      : item.value}</dd></div>
+  `).join("");
 }
 
 function renderSuggestions() {
@@ -1036,6 +533,7 @@ function scrollChatToLatest() {
 }
 
 function appendChatMessage(content, role, isStatus = false) {
+  if (role === "user") chatUI.beginMessage();
   const message = document.createElement("div");
   message.className = `chat-message ${role === "user" ? "user-message" : "assistant-message"}`;
   message.textContent = content;
@@ -1063,6 +561,7 @@ function setChatBusy(isBusy) {
 }
 
 function modelLoadingText(progress) {
+  chatUI.setProgress(progress);
   const percentage = Math.round(Number(progress?.progress) * 100);
   return Number.isFinite(percentage)
     ? `Loading AI model... ${Math.min(100, Math.max(0, percentage))}%`
@@ -1120,6 +619,7 @@ async function sendChatMessage() {
       const [projectData, skillData, experienceData] = await Promise.all([
         getProjects(), getSkills(), getExperience(),
       ]);
+      chatUI.showDataStatus([projectData.status, skillData.status, experienceData.status]);
       knowledgeItems = currentKnowledge(projectData, skillData, experienceData);
       turn = prepareTurn(content, messages, knowledgeItems);
     }
@@ -1144,6 +644,7 @@ async function sendChatMessage() {
     }
   } finally {
     statusMessage?.remove();
+    chatUI.finish(Boolean(engine));
     setChatBusy(false);
     assistantInput.focus();
   }
@@ -1164,18 +665,23 @@ profileLinks.querySelectorAll("a").forEach((link) => {
 });
 assistantSendButton.addEventListener("click", sendChatMessage);
 assistantInput.addEventListener("keydown", (event) => {
-  if (event.key !== "Enter" || event.isComposing) return;
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
   sendChatMessage();
 });
 
 renderSkills();
 renderExperience();
-const cleanupProjectCarousel = renderProjects();
+renderProjects();
 renderEducation();
 renderCertifications();
 renderContact();
 renderSuggestions();
 preventPlaceholderLinks();
 
-window.addEventListener("beforeunload", cleanupProjectCarousel, { once: true });
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && profileLinks.classList.contains("is-open")) {
+    closeMenu();
+    menuToggle.focus();
+  }
+});

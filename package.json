@@ -3,12 +3,14 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "preview": "node scripts/preview.mjs",
     "test": "vitest run"
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.85"
   },
   "devDependencies": {
+    "jsdom": "^29.1.1",
     "vitest": "^5.0.5"
   }
 }
