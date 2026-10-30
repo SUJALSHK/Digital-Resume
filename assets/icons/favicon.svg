@@ -1,13 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">Sujal Shakya</title>
-  <rect width="64" height="64" rx="8" fill="#0f1115" />
+  <rect width="64" height="64" rx="10" fill="#046a38" />
+  <rect x="44" y="0" width="20" height="6" fill="#e34222" />
   <text
     x="32"
-    y="38"
-    fill="#3fb27f"
-    font-family="Arial, sans-serif"
-    font-size="18"
-    font-weight="600"
+    y="41"
+    fill="#f9ebd7"
+    font-family="Georgia, serif"
+    font-size="24"
+    font-weight="700"
     text-anchor="middle"
   >SS</text>
 </svg>

@@ -1,7 +1,7 @@
 import { initializeChatUI } from "./chat-ui.js";
-import { ASSISTANT_CONFIG } from "./assistant-config.js";
-import { IN_SCOPE, OUT_OF_SCOPE, buildKnowledgeItems, prepareTurn, answerTurn, recordTurn } from "./assistant-policy.js";
-import { createClient } from "https://esm.run/@supabase/supabase-js@2";
+import { initializeProjectCarousel } from "./project-carousel.js";
+import { IN_SCOPE, buildKnowledgeItems, prepareTurn, answerTurn, recordTurn } from "./assistant-policy.js";
+import { renderAnswerCard } from "./answer-card.js";
 
 const MODEL_ID = "Llama-3.2-1B-Instruct-q4f16_1-MLC";
 const SUPABASE_URL = "https://pzdienjoskoxzwsxvvst.supabase.co";
@@ -10,9 +10,20 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_KDfyIuGUj_o4yVoC6K-8hA_R1g29rYE
 const hasSupabaseConfiguration =
   SUPABASE_URL !== "PASTE_MY_PROJECT_URL_HERE" &&
   SUPABASE_PUBLISHABLE_KEY !== "PASTE_MY_PUBLISHABLE_KEY_HERE";
-const supabase = hasSupabaseConfiguration
-  ? createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
-  : null;
+let supabaseClientPromise = null;
+
+// The client loads on the first data request so the CDN download never delays
+// rendering the resume.
+function getSupabase() {
+  if (!hasSupabaseConfiguration) return Promise.resolve(null);
+  supabaseClientPromise ??= import("https://esm.run/@supabase/supabase-js@2")
+    .then(({ createClient }) => createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY))
+    .catch((error) => {
+      supabaseClientPromise = null;
+      throw error;
+    });
+  return supabaseClientPromise;
+}
 
 let engine = null;
 let modelLoadingPromise = null;
@@ -31,6 +42,7 @@ const messages = [];
 const modelProgressListeners = new Set();
 
 async function fetchPublicProjects() {
+  const supabase = await getSupabase();
   if (!supabase) {
     throw new Error(
       "Supabase project fetch skipped because the Project URL or publishable key is missing."
@@ -41,7 +53,7 @@ async function fetchPublicProjects() {
     .from("projects")
     .select("*")
     .eq("is_public", true)
-    .order("project_date", { ascending: false });
+    .order("project_date", { ascending: false, nullsFirst: false });
 
   if (error) {
     throw error;
@@ -79,6 +91,7 @@ async function getProjects() {
 }
 
 async function fetchPublicSkills() {
+  const supabase = await getSupabase();
   if (!supabase) {
     throw new Error(
       "Supabase skill fetch skipped because the Project URL or publishable key is missing."
@@ -127,6 +140,7 @@ async function getSkills() {
 }
 
 async function fetchPublicExperience() {
+  const supabase = await getSupabase();
   if (!supabase) {
     throw new Error(
       "Supabase experience fetch skipped because the Project URL or publishable key is missing."
@@ -216,67 +230,140 @@ async function getOrCreateEngine(onProgress) {
 }
 
 const resumeData = {
+  // Source of truth: SUJAL_SHAKYA_RESUME.pdf (October 2026). Skills and projects
+  // that only appear on the website are kept until they are confirmed outdated.
   skills: [
     {
       group: "Programming Languages",
-      items: ["Python", "TypeScript", "JavaScript", "SQL", "C++"],
+      items: ["C++", "Python", "Java", "Swift", "JavaScript", "TypeScript", "SQL", "Bash"],
     },
     {
       group: "Frontend & Mobile",
-      items: ["React", "Next.js", "React Native", "Tailwind CSS", "HTML/CSS"],
+      items: ["React", "Next.js", "Angular", "React Native", "Expo", "Tailwind CSS", "HTML", "CSS"],
     },
     {
-      group: "Backend & Data",
+      group: "Backend & Databases",
       items: [
         "Django",
         "Django REST Framework",
+        ".NET",
         "REST APIs",
-        "PostgreSQL",
-        "Database Design",
         "JWT Authentication",
+        "PostgreSQL",
+        "Supabase",
+        "Database Management",
       ],
     },
     {
-      group: "Testing & Debugging",
+      group: "Testing",
+      items: ["JUnit", "Pytest", "Playwright", "Postman", "API Testing", "Integration Testing"],
+    },
+    {
+      group: "Cloud, DevOps & Tools",
       items: [
-        "Pytest",
-        "Playwright",
-        "Postman",
-        "API Testing",
-        "Integration Testing",
-        "Debugging",
+        "Git & GitHub",
+        "Docker",
+        "GitHub Actions",
+        "CI/CD",
+        "Linux",
+        "AWS",
+        "Google Cloud Platform",
+        "VS Code",
+        "Cursor",
       ],
-    },
-    {
-      group: "DevOps & Cloud",
-      items: ["Git & GitHub", "Docker", "GitHub Actions", "CI/CD", "Linux", "AWS"],
     },
     {
       group: "AI Engineering",
       items: ["LLM APIs", "Gemini API", "AI-Assisted Development", "RAG Fundamentals"],
     },
-  ],
-  experience: [
     {
-      role: "Mobile Testing & Deployment",
-      company: "M eathon Trucking Company",
-      date: "2026",
-      points: [
-        "Tested mobile application features across different devices and screen sizes to identify usability, layout, and functionality issues.",
-        "Documented defects, verified fixes, and supported deployment activities to help deliver stable mobile releases.",
+      group: "Core Competencies",
+      items: [
+        "Object-Oriented Programming",
+        "Data Structures & Algorithms",
+        "Software Testing",
+        "Debugging",
+        "Full-Stack Development",
       ],
     },
     {
-      role: "Engagement Ambassador",
-      company: "Minnesota State University, Mankato Alumni Foundation",
-      date: "2023 - 2026",
+      group: "Spoken Languages",
+      items: ["English (Advanced)", "Nepali (Native)", "Hindi (Advanced)", "Korean (Beginner)"],
+    },
+  ],
+  experience: [
+    {
+      role: "Mobile Application Tester",
+      company: "M Eaton Trucking LLC",
+      context: "University Client Project",
+      location: "Mankato, MN",
+      date: "Aug 2026 – Dec 2026",
+      technologies: ["Expo React Native", "Django REST APIs", "PostgreSQL"],
       points: [
-        "Built relationships with alumni and supporters through thoughtful outreach and engaging conversations.",
-        "Represented the Alumni Foundation while sharing university updates and encouraging continued involvement with the campus community.",
+        "Tested and troubleshot an Expo React Native mobile application integrated with Django REST APIs and PostgreSQL, including authentication issues.",
+        "Expanded automated testing from 101 to 275 tests across 26 test suites, increasing branch coverage from 40.80% to 79.48% and exceeding the 70% target.",
+        "Identified and documented 8 reproducible software defects, including security, authentication, and mobile functionality issues.",
+        "Collaborated with the development team to identify technical issues and prepare the application for real-world deployment.",
+      ],
+    },
+    {
+      role: "Annual Giving Engagement Manager",
+      company: "Minnesota State University, Mankato",
+      location: "Mankato, MN",
+      date: "Sept 2023 – May 2028",
+      points: [
+        "Manage student engagement ambassadors responsible for connecting with alumni and supporting university fundraising initiatives.",
+        "Supervised 25 student ambassadors overall and 12 callers per shift, monitoring 1,000+ alumni calls and improving outreach performance.",
+        "Trained 30+ new ambassadors, improving call and donor engagement rates.",
+        "Develop leadership, communication, and problem-solving skills through team supervision and alumni relationship management.",
+      ],
+    },
+  ],
+  leadership: [
+    {
+      role: "President",
+      organization: "Nepalese Student Community (NeStCom)",
+      context: "Minnesota State University, Mankato · Recognized Student Organization",
+      date: "Aug 2025 – Aug 2026",
+      points: [
+        "Led a recognized student organization representing 200+ student members, promoting cultural diversity, student engagement, and community.",
+        "Coordinated and supported 3+ cultural and community events, strengthening student participation and cultural awareness.",
+        "Collaborated with university departments, student organizations, and executive board members to organize events and manage logistics.",
       ],
     },
   ],
   projects: [
+    {
+      title: "Reflection Journal Web Application",
+      context: "Personal project",
+      date: "Nov 2026",
+      description:
+        "A responsive web application that organizes academic reflections by class and topic. I implemented creating, editing, and managing reflection entries, persisted them in browser local storage without a backend database, and built a mobile-friendly interface prepared for deployment through Vercel.",
+      tags: ["React", "TypeScript", "Vite", "Tailwind CSS", "React Router", "Local Storage"],
+      liveUrl: "https://reflection-flax.vercel.app/classes",
+      image: "assets/images/projects/reflection-journal-card.webp",
+      imageAlt: "Reflection Journal home screen with a weekly streak, reflection totals, and today's tasks",
+    },
+    {
+      title: "AI-Powered Digital Resume & Personal Portfolio",
+      context: "Personal project",
+      date: "Sept 2026 – Oct 2026",
+      description:
+        "A responsive AI-powered portfolio with a browser-based assistant that uses WebLLM and WebGPU to answer questions about my technical skills, education, experience, projects, and qualifications. I integrated Supabase for dynamic data retrieval and context-aware responses, used GitHub for version control, and deployed it on Vercel.",
+      tags: ["HTML", "CSS", "JavaScript", "WebLLM", "WebGPU", "Llama 3.2", "Supabase", "Vercel"],
+      githubUrl: "https://github.com/SUJALSHK/Digital-Resume",
+      liveUrl: "https://resume.sujalshakya.com/",
+      image: "assets/images/projects/digital-resume-card.webp",
+      imageAlt: "Sujal Shakya's digital resume with the Ask about Sujal assistant beside it",
+    },
+    {
+      title: "Ghost Student Prevention System",
+      context: "Hackathon project",
+      date: "Aug 2025",
+      description:
+        "A student engagement monitoring system that analyzes CSV datasets to identify students at risk of disengagement. I collaborated on the system and integrated Google's Gemini API for AI-powered engagement analysis, with automated email notifications to support early intervention.",
+      tags: ["Next.js", "React", "TypeScript", "Tailwind CSS", "Gemini API", "CSV Processing", "Nodemailer"],
+    },
     {
       title: "Developer Portfolio",
       description:
@@ -284,7 +371,7 @@ const resumeData = {
       tags: ["HTML5", "CSS3", "JavaScript", "GitHub Actions"],
       githubUrl: "https://github.com/SUJALSHK/sujals-portfolio",
       liveUrl: "https://sujalshakya.com/",
-      image: "DeveloperPortfolio.png",
+      image: "assets/images/projects/developer-portfolio.webp",
       imageAlt: "Sujal Shakya's developer portfolio homepage",
     },
     {
@@ -294,7 +381,7 @@ const resumeData = {
       tags: ["HTML5", "CSS3", "Flexbox", "Font Awesome"],
       githubUrl: "https://github.com/SUJALSHK/amazon-clone-sujal",
       liveUrl: "https://sujalshk.github.io/amazon-clone-sujal/",
-      image: "assets/images/projects/amazon-clone.webp",
+      image: "assets/images/projects/amazon-clone-card.webp",
       imageAlt: "Amazon storefront clone showing navigation, a product hero, and category cards",
     },
     {
@@ -313,7 +400,7 @@ const resumeData = {
         "A learning-focused collection of command-line security utilities for exploring practical security fundamentals. I built substitution-cipher encryption and decryption, SHA-256 credential verification, password generation, and a TCP port scanner with input validation and socket timeouts.",
       tags: ["Python", "Sockets", "SHA-256", "CLI Tools"],
       githubUrl: "https://github.com/SUJALSHK/CyberSecutity",
-      image: "assets/images/projects/cybersecurity-repository.webp",
+      image: "assets/images/projects/cybersecurity-repository-card.webp",
       imageAlt: "GitHub repository preview for the Cybersecurity Python Toolkit",
     },
   ],
@@ -331,23 +418,6 @@ const resumeData = {
         {
           label: "Relevant Coursework",
           text: "Data Structures & Algorithms, Operating Systems, Discrete Mathematics, Linear Algebra, Software Engineering, Computer Systems",
-        },
-        {
-          label: "Leadership",
-          text: "President — Nepalese Student Community (NeStCom)",
-        },
-      ],
-    },
-    {
-      school: "Upper-Division Software Engineering Project",
-      program: "M Eaton Trucking LLC",
-      date: "2026 - Present",
-      summary: "Working on a production-oriented mobile application.",
-      technologies: ["React Native", "Django REST Framework", "PostgreSQL"],
-      details: [
-        {
-          label: "Focus Areas",
-          text: "REST API integration, authentication, software testing, debugging, database interaction, mobile permissions, and deployment workflows",
         },
       ],
     },
@@ -373,8 +443,14 @@ const resumeData = {
       href: "https://github.com/SUJALSHK",
     },
     {
+      label: "Phone",
+      value: "(612) 463-5841",
+      icon: "PH",
+      href: "tel:+16124635841",
+    },
+    {
       label: "Location",
-      value: "Minnesota, United States",
+      value: "Mankato, Minnesota",
       icon: "LC",
       href: "",
     },
@@ -415,71 +491,90 @@ function closeMenu() {
   menuToggle.setAttribute("aria-expanded", "false");
 }
 
+const externalIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>';
+
 function renderSkills() {
   document.querySelector("#skillGroups").innerHTML = resumeData.skills.map((group) => `
-    <div class="skill-group"><dt>${group.group}</dt><dd>${group.items.join(", ")}</dd></div>
+    <div class="skill-group">
+      <dt>${group.group}</dt>
+      <dd><ul class="chip-list clean-list">${group.items.map((item) => `<li class="chip">${item}</li>`).join("")}</ul></dd>
+    </div>
   `).join("");
 }
 
-function renderExperience() {
-  document.querySelector("#experienceList").innerHTML = resumeData.experience.map((job) => `
+// Shared by experience and leadership: role, dates, organization line and points.
+function roleCard({ title, date, organization, details, points, technologies }) {
+  return `
     <li class="experience-item">
-      <span class="item-date">${job.date}</span>
-      <div class="experience-body">
-        <h3>${job.role}</h3><h4>${job.company}</h4>
-        <ul>${job.points.map((point) => `<li>${point}</li>`).join("")}</ul>
-      </div>
+      <div class="item-heading"><h3>${title}</h3><span class="item-date">${date}</span></div>
+      <p class="item-org">${organization}</p>
+      ${details ? `<p class="item-context">${details}</p>` : ""}
+      <ul class="experience-points">${points.map((point) => `<li>${point}</li>`).join("")}</ul>
+      ${technologies?.length ? `<ul class="chip-list chip-list-small clean-list item-tech" aria-label="Technologies">${technologies.map((tech) => `<li class="chip">${tech}</li>`).join("")}</ul>` : ""}
     </li>
-  `).join("");
+  `;
+}
+
+function renderExperience() {
+  document.querySelector("#experienceList").innerHTML = resumeData.experience.map((job) => roleCard({
+    title: job.role,
+    date: job.date,
+    organization: job.company,
+    details: [job.context, job.location].filter(Boolean).join(" · "),
+    points: job.points,
+    technologies: job.technologies,
+  })).join("");
+}
+
+function renderLeadership() {
+  document.querySelector("#leadershipList").innerHTML = resumeData.leadership.map((role) => roleCard({
+    title: role.role,
+    date: role.date,
+    organization: role.organization,
+    details: role.context,
+    points: role.points,
+  })).join("");
 }
 
 function renderProjects() {
   document.querySelector("#projectList").innerHTML = resumeData.projects.map((project) => `
-    <li class="project-item">
-      <div class="project-heading">
+    <div class="project-card">
+      <div class="project-media${project.image ? "" : " project-media-empty"}">
+        ${project.image
+          ? `<img src="${project.image}" alt="${project.imageAlt}" loading="lazy" decoding="async" width="640" height="400" />`
+          : `<span class="project-monogram" aria-hidden="true">${project.title.split(" ").slice(0, 2).map((word) => word[0]).join("")}</span>`}
+      </div>
+      <div class="project-body">
+        ${project.date ? `<p class="project-meta">${[project.context, project.date].filter(Boolean).join(" · ")}</p>` : ""}
         <h3>${project.title}</h3>
+        <p class="project-description">${project.description.split(/(?<=\.)\s/)[0]}</p>
+        <ul class="chip-list chip-list-small clean-list" aria-label="Technologies">${project.tags.map((tag) => `<li class="chip">${tag}</li>`).join("")}</ul>
         <div class="project-actions">
-          ${project.liveUrl ? `<a href="${project.liveUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} live">Live</a>` : ""}
-          ${project.githubUrl ? `<a href="${project.githubUrl}" target="_blank" rel="noopener noreferrer" aria-label="View ${project.title} source">Source</a>` : ""}
+          ${project.liveUrl ? `<a href="${project.liveUrl}" target="_blank" rel="noopener noreferrer" aria-label="Live site for ${project.title}, opens in a new tab">Live site ${externalIcon}</a>` : ""}
+          ${project.githubUrl ? `<a href="${project.githubUrl}" target="_blank" rel="noopener noreferrer" aria-label="Source for ${project.title}, opens in a new tab">Source ${externalIcon}</a>` : ""}
         </div>
       </div>
-      <p class="project-description">${project.description.split(/(?<=\.)\s/)[0]}</p>
-      <p class="project-technologies">${project.tags.join(" · ")}</p>
-    </li>
+    </div>
   `).join("");
 }
 
 function renderEducation() {
-  const educationList = document.querySelector("#educationList");
-
-  educationList.innerHTML = resumeData.education
-    .map(
-      (item) => `
-        <article class="education-entry">
+  document.querySelector("#educationList").innerHTML = resumeData.education.map((item) => `
+    <article class="education-entry">
+      <div class="education-heading">
+        <div>
           <h3>${item.program}</h3>
-          <h4>${item.school}</h4>
-          <span class="item-date">${item.expectedGraduation ? `Expected graduation: ${item.expectedGraduation}` : item.date}</span>
-          ${item.summary ? `<p class="education-summary">${item.summary}</p>` : ""}
-          ${
-            item.technologies
-              ? `<div class="education-tech" aria-label="Project technologies">
-                  ${item.technologies.join(" · ")}
-                </div>`
-              : ""
-          }
-          <div class="education-details">
-            ${item.details
-              .map(
-                (detail) => `
-                  <p><strong>${detail.label}:</strong> ${detail.text}</p>
-                `
-              )
-              .join("")}
-          </div>
-        </article>
-      `
-    )
-    .join("");
+          <p class="item-org">${item.school}</p>
+        </div>
+        <span class="item-date">${item.expectedGraduation ? `Expected graduation: ${item.expectedGraduation}` : item.date}</span>
+      </div>
+      ${item.summary ? `<p class="education-summary">${item.summary}</p>` : ""}
+      ${item.technologies ? `<ul class="chip-list chip-list-small clean-list" aria-label="Project technologies">${item.technologies.map((tech) => `<li class="chip">${tech}</li>`).join("")}</ul>` : ""}
+      <dl class="education-details">
+        ${item.details.map((detail) => `<div><dt>${detail.label}</dt><dd>${detail.text}</dd></div>`).join("")}
+      </dl>
+    </article>
+  `).join("");
 }
 
 function renderCertifications() {
@@ -582,22 +677,20 @@ function currentKnowledge(projectData, skillData, experienceData) {
   });
 }
 
-function appendRefusalSuggestions() {
-  const suggestions = document.createElement("div");
-  suggestions.className = "suggestion-list refusal-suggestions";
-  suggestions.setAttribute("aria-label", "Questions about Sujal");
-  ASSISTANT_CONFIG.suggestions.forEach((question) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = question;
-    button.addEventListener("click", () => {
-      if (isGenerating) return;
-      assistantInput.value = question;
-      sendChatMessage();
-    });
-    suggestions.appendChild(button);
-  });
-  chatWindow.appendChild(suggestions);
+function askFollowUp(question) {
+  if (isGenerating) return;
+  assistantInput.value = question;
+  sendChatMessage();
+}
+
+// Source links scroll the page to the section; on phones the sheet closes first.
+function showSource(href) {
+  chatUI.closeSheet();
+  document.querySelector(href)?.scrollIntoView({ block: "start" });
+}
+
+function appendAnswer(answer) {
+  chatWindow.appendChild(renderAnswerCard(answer.card, { onFollowUp: askFollowUp, onSource: showSource }));
   scrollChatToLatest();
 }
 
@@ -624,8 +717,8 @@ async function sendChatMessage() {
       turn = prepareTurn(content, messages, knowledgeItems);
     }
 
-    // The gate runs before model import, loading, or inference. Output is fully
-    // buffered and validated; no untrusted model tokens reach the DOM.
+    // The gate runs before model import, loading, or inference. The model only
+    // selects record ids; the answer card is composed from the records.
     const assistantResponse = await answerTurn(turn, messages, knowledgeItems, async () => {
       if (!navigator.gpu) throw new Error("WebGPU unavailable; using resume records.");
       setStatusMessage(statusMessage, engine ? "Thinking..." : "Loading AI model...");
@@ -637,17 +730,34 @@ async function sendChatMessage() {
     });
 
     statusMessage?.remove();
-    appendChatMessage(assistantResponse, "assistant");
-    recordTurn(messages, turn, assistantResponse);
-    if (turn.scope === OUT_OF_SCOPE || assistantResponse === ASSISTANT_CONFIG.refusal) {
-      appendRefusalSuggestions();
-    }
+    appendAnswer(assistantResponse);
+    recordTurn(messages, turn, assistantResponse.text);
   } finally {
     statusMessage?.remove();
     chatUI.finish(Boolean(engine));
     setChatBusy(false);
     assistantInput.focus();
   }
+}
+
+// Highlights the navigation link for the section currently in the reading zone.
+function observeSections() {
+  const links = new Map([...document.querySelectorAll(".section-links a")]
+    .map((link) => [link.hash.slice(1), link]));
+  if (!("IntersectionObserver" in window)) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      links.forEach((link, id) => {
+        if (id === entry.target.id) link.setAttribute("aria-current", "location");
+        else link.removeAttribute("aria-current");
+      });
+    });
+  }, { rootMargin: "-30% 0px -60% 0px" });
+  links.forEach((_, id) => {
+    const section = document.getElementById(id);
+    if (section) observer.observe(section);
+  });
 }
 
 function preventPlaceholderLinks() {
@@ -672,12 +782,15 @@ assistantInput.addEventListener("keydown", (event) => {
 
 renderSkills();
 renderExperience();
+renderLeadership();
 renderProjects();
+initializeProjectCarousel();
 renderEducation();
 renderCertifications();
 renderContact();
 renderSuggestions();
 preventPlaceholderLinks();
+observeSections();
 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && profileLinks.classList.contains("is-open")) {

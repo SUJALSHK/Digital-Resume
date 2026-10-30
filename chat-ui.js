@@ -142,6 +142,7 @@ export function initializeChatUI() {
   return {
     destroy() { controller.abort(); clearTimeout(compactTimer); unlockScroll(); },
     resizeInput,
+    closeSheet: () => close(),
     beginMessage() {
       document.querySelector('.chat-empty')?.remove();
       document.querySelector('#suggestionList').hidden = true;

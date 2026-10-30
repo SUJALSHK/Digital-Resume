@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Sujal Shakya's education, skills, projects, and experience." />
     <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#f9ebd7" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#13110e" media="(prefers-color-scheme: dark)" />
     <title>Sujal Shakya | Digital Resume</title>
     <script>
       (() => {
@@ -22,20 +24,42 @@
   <body id="top">
     <a class="skip-link" href="#resume">Skip to resume</a>
     <header class="topbar">
-      <nav class="topbar-inner page-width" aria-label="Profile links">
+      <nav class="topbar-inner page-width" aria-label="Primary">
         <a class="identity" href="#top">Sujal Shakya</a>
         <div class="profile-links" id="profileLinks">
-          <a href="https://github.com/SUJALSHK" target="_blank" rel="noopener noreferrer">GitHub</a>
-          <a href="https://www.linkedin.com/in/sujal-shakya-77764a2ba/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-          <a href="https://sujalshakya.com/#portfolio">Projects</a>
-          <a class="resume-link" href="Sujal_Shakya_Resume1.pdf" download="Sujal_Shakya_Resume1.pdf">Resume PDF</a>
+          <ul class="section-links clean-list">
+            <li><a href="#experience">Experience</a></li>
+            <li><a href="#leadership">Leadership</a></li>
+            <li><a href="#skills">Skills</a></li>
+            <li><a href="#projects">Projects</a></li>
+            <li><a href="#education">Education</a></li>
+            <li><a href="#contact">Contact</a></li>
+          </ul>
+          <div class="external-links">
+            <a class="social-link" href="https://github.com/SUJALSHK" target="_blank" rel="noopener noreferrer" aria-label="GitHub" title="GitHub">
+              <svg class="brand-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" /></svg>
+              <span class="menu-label">GitHub</span>
+            </a>
+            <a class="social-link" href="https://www.linkedin.com/in/sujal-shakya-77764a2ba/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">
+              <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" /></svg>
+              <span class="menu-label">LinkedIn</span>
+            </a>
+            <a class="social-link" href="https://sujalshakya.com/#portfolio" aria-label="Portfolio site" title="Portfolio site">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-9-9h18M12 3c2.5 2.6 3.75 5.6 3.75 9S14.5 18.4 12 21c-2.5-2.6-3.75-5.6-3.75-9S9.5 5.6 12 3Z" /></svg>
+              <span class="menu-label">Portfolio site</span>
+            </a>
+            <a class="resume-link" href="Sujal_Shakya_Resume1.pdf" download="Sujal_Shakya_Resume1.pdf">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" /></svg>
+              Resume PDF
+            </a>
+          </div>
         </div>
         <div class="topbar-actions">
           <button class="theme-toggle icon-button" type="button" aria-label="Toggle dark and light mode">
             <svg class="sun-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3V1m0 22v-2m9-9h2M1 12h2m15.36-6.36 1.41-1.41M4.23 19.77l1.41-1.41m0-12.72L4.23 4.23m15.54 15.54-1.41-1.41M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" /></svg>
             <svg class="moon-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 13.2A8.7 8.7 0 1 1 10.8 3a7 7 0 0 0 10.2 10.2Z" /></svg>
           </button>
-          <button class="menu-toggle icon-button" type="button" aria-label="Open profile links" aria-controls="profileLinks" aria-expanded="false">
+          <button class="menu-toggle icon-button" type="button" aria-label="Open navigation" aria-controls="profileLinks" aria-expanded="false">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
         </div>
@@ -44,31 +68,63 @@
 
     <main class="app-frame page-width">
       <div class="resume-pane" id="resume" tabindex="-1">
-        <article class="profile-card" aria-labelledby="profile-name">
-          <div class="profile-heading">
-            <img class="profile-photo" src="assets/images/profile/sujal-shakya.jpg" alt="Sujal Shakya" width="108" height="144" fetchpriority="high" />
-            <h1 id="profile-name">Sujal Shakya</h1>
+        <article class="hero" aria-labelledby="profile-name">
+          <img class="profile-photo" src="assets/images/profile/sujal-shakya.jpg" alt="Sujal Shakya" width="270" height="360" fetchpriority="high" />
+          <div class="hero-content">
+            <div class="name-row">
+              <h1 id="profile-name">Sujal Shakya<span class="name-mark" aria-hidden="true">.</span></h1>
+              <p class="availability"><span class="status-dot" aria-hidden="true"></span>Open to work</p>
+            </div>
+            <p class="profile-title">Computer Science Student | Software Developer | Building Full-Stack Applications &amp; Exploring AI</p>
+            <p class="profile-summary">Computer Science student and software developer focused on full-stack development, AI, and building real-world solutions.</p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="https://www.linkedin.com/in/sujal-shakya-77764a2ba/" target="_blank" rel="noopener noreferrer">
+                <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" /></svg>
+                Message me on LinkedIn<span class="sr-only"> (opens in a new tab)</span>
+              </a>
+              <a class="button button-secondary" href="Sujal_Shakya_Resume1.pdf" download="Sujal_Shakya_Resume1.pdf">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14" /></svg>
+                Download resume
+              </a>
+              <a class="button button-secondary" href="#projects">View projects</a>
+            </div>
+            <dl class="hero-facts">
+              <div><dt>Studying</dt><dd>B.S. Computer Science, Minnesota State University, Mankato</dd></div>
+              <div><dt>Expected graduation</dt><dd>May 2028</dd></div>
+              <div><dt>Location</dt><dd>Mankato, Minnesota</dd></div>
+            </dl>
           </div>
-          <p class="profile-title">Computer Science Student | Software Developer | Building Full-Stack Applications &amp; Exploring AI</p>
-          <p class="profile-summary">Computer Science student and software developer focused on full-stack development, AI, and building real-world solutions.</p>
-          <div class="profile-contact">
-            <a href="mailto:sujal.shakya@mnsu.edu">sujal.shakya@mnsu.edu</a>
-            <span>Minnesota, United States</span>
-          </div>
-          <p class="availability">Open to work</p>
         </article>
 
         <section class="resume-section" id="experience" aria-labelledby="experience-heading">
           <h2 id="experience-heading">Experience</h2>
-          <ul class="experience-list clean-list" id="experienceList"></ul>
+          <ol class="experience-list clean-list" id="experienceList"></ol>
+        </section>
+        <section class="resume-section" id="leadership" aria-labelledby="leadership-heading">
+          <h2 id="leadership-heading">Leadership</h2>
+          <ul class="leadership-list clean-list" id="leadershipList"></ul>
         </section>
         <section class="resume-section" id="skills" aria-labelledby="skills-heading">
           <h2 id="skills-heading">Skills</h2>
           <dl class="skill-groups" id="skillGroups"></dl>
         </section>
-        <section class="resume-section" id="projects" aria-labelledby="projects-heading">
-          <h2 id="projects-heading">Projects</h2>
-          <ul class="project-list clean-list" id="projectList"></ul>
+        <section class="resume-section project-carousel" id="projects" aria-labelledby="projects-heading" aria-roledescription="carousel" data-carousel>
+          <div class="carousel-header">
+            <h2 id="projects-heading">Projects</h2>
+            <div class="carousel-controls">
+              <button class="carousel-toggle carousel-button" type="button" aria-label="Pause automatic project rotation"></button>
+              <button class="carousel-prev carousel-button" type="button" aria-label="Previous project" aria-controls="projectList">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg>
+              </button>
+              <button class="carousel-next carousel-button" type="button" aria-label="Next project" aria-controls="projectList">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+              </button>
+            </div>
+          </div>
+          <div class="carousel-viewport">
+            <div class="project-list" id="projectList" aria-live="off"></div>
+          </div>
+          <div class="carousel-dots" role="group" aria-label="Choose a project"></div>
         </section>
         <section class="resume-section" id="education" aria-labelledby="education-heading">
           <h2 id="education-heading">Education</h2>
@@ -78,10 +134,22 @@
           <h2 id="certification-heading">Certifications</h2>
           <div id="certificationList"></div>
         </section>
-        <section class="resume-section" id="contact" aria-labelledby="contact-heading">
-          <h2 id="contact-heading">Contact</h2>
+        <section class="resume-section contact-section" id="contact" aria-labelledby="contact-heading">
+          <div class="contact-intro">
+            <h2 id="contact-heading">Contact</h2>
+            <p>Open to work. Send a message on LinkedIn, or use the email below.</p>
+            <a class="button button-primary" href="https://www.linkedin.com/in/sujal-shakya-77764a2ba/" target="_blank" rel="noopener noreferrer">
+              <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28ZM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13ZM7.12 20.45H3.56V9h3.56v11.45ZM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0Z" /></svg>
+              Message me on LinkedIn<span class="sr-only"> (opens in a new tab)</span>
+            </a>
+          </div>
           <dl class="contact-list" id="contactGrid"></dl>
         </section>
+
+        <footer class="site-footer">
+          <p>© 2026 Sujal Shakya</p>
+          <a href="#top">Back to top</a>
+        </footer>
       </div>
 
       <aside class="assistant-rail" id="resumeChat" aria-labelledby="chat-title" tabindex="-1" hidden>
